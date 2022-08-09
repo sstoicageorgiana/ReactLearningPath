@@ -1,14 +1,17 @@
-import express from 'express';
+import express, { response } from 'express';
 import {check , validationResult} from 'express-validator'
 import gravatar from 'gravatar';
 import bcryptjs from 'bcryptjs';
 import jsonwebtoken from 'jsonwebtoken';
-import config from 'config';
+import 'dotenv/config';
 
 import User from '../models/User.js';
 
+
 const router = express.Router();
 
+
+//min 50 - sesiunea 6 explicatie registration
 
 //#region testRoute
 
@@ -21,68 +24,113 @@ router.get(('/'), (req, res) => res.send("Test router for user !"));
 //#endregion
 
 
-//#region  userRegistrationSetep
+//#region  User REGISTRATION
 
 // @router          POST API/user
 // @description     Registrer User
 // @access          Public 
 //Postman           http://localhost:5000/API/user
 
+
+//verific cu express-validator daca name email password sunt valide, daca nu dau eroare 
 router.post('/', 
 [
+    //CHECK WITH EXPRESS-VALIDATOR THE INPUST
     check('name', 'Name is required').not().isEmpty(),
     check('email', 'Please use a valid e-mail').isEmail(),
     check('password', 'The password must contain at list 4 characters').isLength({min:4}),
+ 
 ], async(req, res) => {
     console.log(req.body);
     const errors = validationResult(req);
     console.log(errors);
     if(!errors.isEmpty()){
-        console.log("winter is coming!")
-        return res.status(400).json({errors:errors})
+        return res.status(400).json({errors:errors}) 
     }else{
-        console.log("winter is not coming!")
-        res.send('winter is not coming');
+        //facem destructaring din body
         const {name, email, password} = req.body;
         console.log(`name: ${name}  email: ${email}  password: ${password}`)
-        
+       
         
         try{
-            //situations : if the user already exists
-            let user = await User.findOne({email: email});
-            console.log(`user is : ${null}`);
 
+            //#region CHECK IF USER ALREADY EXISTS
+
+            let user = await User.findOne({email: email});
             if(user){
                 return res
                 .status(400)
                 .json({ errors: [{msg : 'User exists'}] });
             }
-
+            //#endregion
+           
             //get avatar 
             const avatar = gravatar.profile_url(email,{
                 s: '200',
                 r: 'pg',
                 d: 'mm', 
             })
-            console.log(avatar);
+            
+            //#region INSTANTIATE USER
 
             user = new User({
                 name : name, 
                 email : email, 
-                password : password
+                password : password,
+                avatar : avatar
             });
-            console.log("after user is filled: ", user);
+            //#endregion
 
+            //#region ENCRYPT/HASH the PASSWORD
+            //HIDE THE PASS INTO A HASH
+            
+            const salt = await bcryptjs.genSalt(10);
+            user.password = await bcryptjs.hash(password, salt);
+            //#endregion 
+
+            //#region SAVE USER IN DB
+             
             await user.save();
-            return res.status(201).json(user);
+            //#endregion
 
+            //#region RETURN "TOKANIZE" INFO TO THE USER WITH EXPIRATION DATE
+
+            //un raspuns  este o info despre user, nu o vrem in front-end 
+            //este ok ca atunci cand ma logez sa primesc un token si pe baza lui
+            //aplicatia sa stie ...
+            //ascundem un user intr-un token
+            //pe baza id ului putem implementa ce poate vedea cine 
+            // tokenul ce se intoarce catre utilizator vrem sa il folosim in ui si sa il punem in localstorage!
+            //ce vom pune in token => pe baza acestui id vom sti ce user poate folosi ce
+            //in token we have the uniqness of the user
+            //the user after it is saved return an id
+  
+            const payload = {
+                user: {
+                    id: user.id, // user.id is the one from postman
+                },
+            };
+
+            console.log("process.env.jwtsecret: ", process.env.jwtsecret);
+            //payload=> id din user cand s-a salvat recordul, jwtSecret=> "salt", timp de expirare
+            jsonwebtoken.sign(payload, process.env.jwtSecret, {expiresIn:360000}, (err, token )=> {
+                if(err)  throw err;
+                return res.json({
+                    token : token
+                });
+            });
+            
+            //#endregion 
+
+        //    return res.status(201).json(user);
         }catch(error){
                 console.log(error);
+                res.status(500).send('Server error!');
         }
     }
 })
 
-//[] => set of verifications we can do with npm install express-validator(install and import)
+
 //a POST means i have a request => STEP 1 in Postman
 
 
