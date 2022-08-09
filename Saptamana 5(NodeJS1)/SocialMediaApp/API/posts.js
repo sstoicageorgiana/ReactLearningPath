@@ -18,7 +18,6 @@ const router = express.Router();
 // @access              private - only auth users cand add new posts 
 // Postman              Request : http://localhost:5000/API/posts
 
-//auth => sa avem token adica  sa fim logati
 router.post('/', [auth,
     [
         check('text', 'Post content required').not().isEmpty()
