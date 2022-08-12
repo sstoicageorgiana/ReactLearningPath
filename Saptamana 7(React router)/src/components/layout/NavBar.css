@@ -1,0 +1,11 @@
+
+.navbar a:hover,
+.navbar a:active,
+.active{
+    color:brown;
+    border-bottom: 4px solid;
+}
+
+.navbar a{
+    text-decoration: none;
+}
